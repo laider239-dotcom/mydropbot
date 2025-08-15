@@ -8,9 +8,6 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 # Получаем токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Render может передавать PORT, но для бота это не обязательно
-PORT = int(os.environ.get("PORT", 8000))
-
 # Создаём бота и диспетчер
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -18,14 +15,19 @@ dp = Dispatcher()
 # Временное хранилище данных пользователей
 user_data = {}
 
-# Клавиатура с категориями
+# Клавиатура с расширенными категориями
 categories_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Электроника")],
-        [KeyboardButton(text="Одежда")],
-        [KeyboardButton(text="Гаджеты")],
-        [KeyboardButton(text="Дом и дача")],
-        [KeyboardButton(text="Красота и уход")]
+        [KeyboardButton(text="📱 Телефоны и аксессуары")],
+        [KeyboardButton(text="🎧 Наушники и аудио")],
+        [KeyboardButton(text="💻 Компьютеры и ноутбуки")],
+        [KeyboardButton(text="🎮 Игры и приставки")],
+        [KeyboardButton(text="🏠 Дом и сад")],
+        [KeyboardButton(text="👗 Одежда и обувь")],
+        [KeyboardButton(text="💄 Красота и здоровье")],
+        [KeyboardButton(text="🐾 Товары для животных")],
+        [KeyboardButton(text="🚗 Авто и мото")],
+        [KeyboardButton(text="🧸 Детские товары")]
     ],
     resize_keyboard=True
 )
@@ -39,7 +41,12 @@ async def start(message: types.Message):
         reply_markup=categories_kb
     )
 
-@dp.message(lambda m: m.text in ["Электроника", "Одежда", "Гаджеты", "Дом и дача", "Красота и уход"])
+@dp.message(lambda m: m.text in [
+    "📱 Телефоны и аксессуары", "🎧 Наушники и аудио", "💻 Компьютеры и ноутбуки",
+    "🎮 Игры и приставки", "🏠 Дом и сад", "👗 Одежда и обувь",
+    "💄 Красота и здоровье", "🐾 Товары для животных",
+    "🚗 Авто и мото", "🧸 Детские товары"
+])
 async def category_chosen(message: types.Message):
     user_id = message.from_user.id
     category = message.text
@@ -50,18 +57,18 @@ async def category_chosen(message: types.Message):
         parse_mode="Markdown"
     )
 
-    # Генерируем описание через ИИ (из ai.py)
-    product_name = "Умная розетка с Wi-Fi"
-    description = "Умная розетка, которую можно включать голосом через Алису. Управление техникой из любой точки дома."
-    
-    # Показываем товар
+    # Пример товара (в будущем — через AI)
+    product_name = category.replace("📱 ", "").replace("🎧 ", "").replace("💻 ", "") + " по акции"
+    description = "Популярный товар с высокой наценкой. В тренде на TikTok."
+
     await message.answer(
-        f"🔋 {product_name}\n\n"
+        f"📦 *{product_name}*\n\n"
         f"💡 {description}\n\n"
-        f"💰 Закупка: ~500 ₽\n"
-        f"🎯 Продажа: 1490 ₽\n"
-        f"🚚 Доставка: 10–14 дней\n\n"
+        f"💰 Закупка: ~600 ₽\n"
+        f"🎯 Продажа: 1990 ₽\n"
+        f"🚚 Доставка: 10–18 дней\n\n"
         f"Добавить в лендинг?",
+        parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -72,20 +79,78 @@ async def category_chosen(message: types.Message):
         )
     )
 
-@dp.callback_query(lambda c: c.data == "add_product")
+@dp.message(lambda message: message.text.startswith("/find"))
+async def find_product(message: types.Message):
+    query = message.text.replace("/find", "").strip()
+    
+    if not query:
+        await message.answer("Напиши, что ищешь. Например: `/find наушники`", parse_mode="Markdown")
+        return
+
+    await message.answer(
+        f"🔍 Ищу трендовые товары по запросу: *{query}*...",
+        parse_mode="Markdown"
+    )
+
+    # Пример товаров
+    products = [
+        {
+            "name": f"Трендовые {query} 2025",
+            "cost": "500 ₽",
+            "price": "1790 ₽",
+            "delivery": "12–16 дней",
+            "desc": "Вирусный товар на TikTok. Высокая конверсия."
+        },
+        {
+            "name": f"Премиум {query} с гарантией",
+            "cost": "700 ₽",
+            "price": "2290 ₽",
+            "delivery": "10–14 дней",
+            "desc": "Качественный товар с быстрой доставкой."
+        }
+    ]
+
+    for p in products:
+        await message.answer(
+            f"✨ *{p['name']}*\n\n"
+            f"💡 {p['desc']}\n\n"
+            f"💰 Закупка: {p['cost']}\n"
+            f"🎯 Продажа: {p['price']}\n"
+            f"🚚 Доставка: {p['delivery']}\n\n"
+            f"Добавить в лендинг?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="✅ Да",
+                            callback_data=f"add_{p['name'][:10]}"
+                        ),
+                        InlineKeyboardButton(
+                            text="❌ Нет",
+                            callback_data="next_product"
+                        )
+                    ]
+                ]
+            )
+        )
+
+@dp.callback_query(lambda c: c.data.startswith("add_"))
 async def add_product(callback: types.CallbackQuery):
-    await callback.message.answer("✅ Товар добавлен! Скоро создам для тебя лендинг в Notion.")
+    await callback.message.answer(
+        "✅ Отлично! Товар добавлен.\n\n"
+        "Скоро я создам для тебя лендинг в Notion — просто подожди!"
+    )
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "next_product")
 async def next_product(callback: types.CallbackQuery):
-    await callback.message.answer("🔍 Ищу другой товар...")
+    await callback.message.answer("🔍 Ищу другой товар…")
     await callback.answer()
 
 # Запуск бота
 async def main():
-    await dp.start_polling(bot)  # Убрали resolve_allowed_updates()
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
