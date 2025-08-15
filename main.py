@@ -1,13 +1,21 @@
 # main.py
 import os
+import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
+# Получаем токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+# Render передаёт порт, или используем 8000 по умолчанию
+PORT = int(os.environ.get("PORT", 8000))
+
+# Создаём бота и диспетчер
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Временное хранилище данных пользователей
 user_data = {}
 
 # Клавиатура с категориями
@@ -68,9 +76,9 @@ async def next_product(callback: types.CallbackQuery):
     await callback.message.answer("🔍 Ищу другой товар...")
     await callback.answer()
 
+# Запуск бота
 async def main():
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, allowed_updates=dp.resolve_allowed_updates())
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
