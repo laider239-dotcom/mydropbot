@@ -8,7 +8,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 # Получаем токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Render передаёт порт, или используем 8000 по умолчанию
+# Render может передавать PORT, но для бота это не обязательно
 PORT = int(os.environ.get("PORT", 8000))
 
 # Создаём бота и диспетчер
@@ -50,12 +50,18 @@ async def category_chosen(message: types.Message):
         parse_mode="Markdown"
     )
 
+    # Генерируем описание через ИИ (из ai.py)
+    product_name = "Умная розетка с Wi-Fi"
+    description = "Умная розетка, которую можно включать голосом через Алису. Управление техникой из любой точки дома."
+    
+    # Показываем товар
     await message.answer(
-        "🔋 Умная розетка с Wi-Fi\n"
-        "💰 Закупка: ~500 ₽\n"
-        "🎯 Продажа: 1490 ₽\n"
-        "🚚 Доставка: 10–14 дней\n\n"
-        "Добавить этот товар в твой лендинг?",
+        f"🔋 {product_name}\n\n"
+        f"💡 {description}\n\n"
+        f"💰 Закупка: ~500 ₽\n"
+        f"🎯 Продажа: 1490 ₽\n"
+        f"🚚 Доставка: 10–14 дней\n\n"
+        f"Добавить в лендинг?",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -78,7 +84,8 @@ async def next_product(callback: types.CallbackQuery):
 
 # Запуск бота
 async def main():
-    await dp.start_polling(bot, allowed_updates=dp.resolve_allowed_updates())
+    await dp.start_polling(bot)  # Убрали resolve_allowed_updates()
 
 if __name__ == "__main__":
     asyncio.run(main())
+
