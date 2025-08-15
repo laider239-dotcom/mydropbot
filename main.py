@@ -9,14 +9,14 @@ from aiohttp import web
 # Получаем токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Render передаёт порт через переменную PORT (по умолчанию 10000)
+# Render использует порт 10000 по умолчанию
 PORT = int(os.environ.get("PORT", 10000))
 
 # Создаём бота и диспетчер
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Временное хранилище данных пользователей
+# Временное хранилище
 user_data = {}
 
 # Клавиатура с категориями
@@ -148,27 +148,30 @@ async def next_product(callback: types.CallbackQuery):
     await callback.message.answer("🔍 Ищу другой товар…")
     await callback.answer()
 
-# === ВЕБ-СЕРВЕР ДЛЯ RENDER ===
+# === Веб-сервер для Render ===
 async def health_check(request):
     return web.Response(text="Bot is running", status=200)
 
-def start_web_server():
+async def start_web_server():
     app = web.Application()
     app.router.add_get('/health', health_check)
     runner = web.AppRunner(app)
-    return runner
-
-# === ЗАПУСК БОТА И СЕРВЕРА ===
-async def main():
-    # Запускаем веб-сервер
-    runner = start_web_server()
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
+
+# === Запуск бота и сервера ===
+async def main():
+    # Запускаем веб-сервер
+    await start_web_server()
     print(f"Web server started on port {PORT}")
 
     # Запускаем бота
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        print(f"Ошибка бота: {e}")
+        # Не перезапускаем — пусть Render сам перезапустит сервис
 
 if __name__ == "__main__":
     asyncio.run(main())
