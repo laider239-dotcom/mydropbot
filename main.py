@@ -4,9 +4,13 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiohttp import web
 
 # Получаем токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+# Render передаёт порт через переменную PORT (по умолчанию 10000)
+PORT = int(os.environ.get("PORT", 10000))
 
 # Создаём бота и диспетчер
 bot = Bot(token=BOT_TOKEN)
@@ -15,7 +19,7 @@ dp = Dispatcher()
 # Временное хранилище данных пользователей
 user_data = {}
 
-# Клавиатура с расширенными категориями
+# Клавиатура с категориями
 categories_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📱 Телефоны и аксессуары")],
@@ -57,13 +61,10 @@ async def category_chosen(message: types.Message):
         parse_mode="Markdown"
     )
 
-    # Пример товара (в будущем — через AI)
     product_name = category.replace("📱 ", "").replace("🎧 ", "").replace("💻 ", "") + " по акции"
-    description = "Популярный товар с высокой наценкой. В тренде на TikTok."
-
     await message.answer(
         f"📦 *{product_name}*\n\n"
-        f"💡 {description}\n\n"
+        f"💡 Популярный товар с высокой наценкой. В тренде на TikTok.\n\n"
         f"💰 Закупка: ~600 ₽\n"
         f"🎯 Продажа: 1990 ₽\n"
         f"🚚 Доставка: 10–18 дней\n\n"
@@ -92,7 +93,6 @@ async def find_product(message: types.Message):
         parse_mode="Markdown"
     )
 
-    # Пример товаров
     products = [
         {
             "name": f"Трендовые {query} 2025",
@@ -148,8 +148,26 @@ async def next_product(callback: types.CallbackQuery):
     await callback.message.answer("🔍 Ищу другой товар…")
     await callback.answer()
 
-# Запуск бота
+# === ВЕБ-СЕРВЕР ДЛЯ RENDER ===
+async def health_check(request):
+    return web.Response(text="Bot is running", status=200)
+
+def start_web_server():
+    app = web.Application()
+    app.router.add_get('/health', health_check)
+    runner = web.AppRunner(app)
+    return runner
+
+# === ЗАПУСК БОТА И СЕРВЕРА ===
 async def main():
+    # Запускаем веб-сервер
+    runner = start_web_server()
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    print(f"Web server started on port {PORT}")
+
+    # Запускаем бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
