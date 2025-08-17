@@ -6,20 +6,20 @@ from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiohttp import web
 
-# Получаем токен из переменных окружения
+# === Настройки ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Render использует порт 10000 по умолчанию
 PORT = int(os.environ.get("PORT", 10000))
 
-# Создаём бота и диспетчер
+# === Бот и диспетчер ===
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Временное хранилище (если понадобится)
+# === Временное хранилище ===
 user_data = {}
 
-# Попробуем подключить ИИ
+# === Попробуем подключить ИИ ===
 try:
     from ai import generate_description
 except ImportError:
@@ -27,7 +27,7 @@ except ImportError:
     def generate_description(product_name, category):
         return "Популярный товар с высокой наценкой. В тренде."
 
-# Клавиатура с категориями
+# === Клавиатура с категориями ===
 categories_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📱 Телефоны и аксессуары")],
@@ -44,6 +44,7 @@ categories_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+# === Обработчик /start ===
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer(
@@ -54,17 +55,14 @@ async def start(message: types.Message):
         parse_mode="Markdown"
     )
 
+# === Обработчик выбора категории ===
 @dp.message(lambda m: m.text in [
     "📱 Телефоны и аксессуары", "🎧 Наушники и аудио", "💻 Компьютеры и ноутбуки",
-    "🎮 Игры и приставки", "🏠 Дом и сад", "👗 Одежа и обувь",
+    "🎮 Игры и приставки", "🏠 Дом и сад", "👗 Одежда и обувь",
     "💄 Красота и здоровье", "🐾 Товары для животных",
     "🚗 Авто и мото", "🧸 Детские товары"
 ])
 async def category_chosen(message: types.Message):
-    """
-    Обрабатывает выбор категории пользователем.
-    Генерирует описание через ИИ и показывает товар.
-    """
     user_id = message.from_user.id
     category = message.text
 
@@ -101,6 +99,7 @@ async def category_chosen(message: types.Message):
         )
     )
 
+# === Обработчик кнопок ===
 @dp.callback_query(lambda c: c.data == "add_product")
 async def add_product(callback: types.CallbackQuery):
     await callback.message.answer(
@@ -138,5 +137,6 @@ async def main():
     except Exception as e:
         print(f"❌ Ошибка бота: {e}")
 
+# === Запуск ===
 if __name__ == "__main__":
     asyncio.run(main())
