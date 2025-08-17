@@ -6,45 +6,40 @@ from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiohttp import web
 
-# Импортируем модули
-try:
-    from ai import generate_description
-except ImportError:
-    def generate_description(name, cat): return "Популярный товар с высокой наценкой."
-
-try:
-    from russian_suppliers import find_russian_product
-except ImportError:
-    def find_russian_product(query):
-        return {
-            "name": f"Трендовый {query}",
-            "price_rub": 450,
-            "image": "https://pics.aliexpress.com/...jpg",
-            "delivery_days": 5,
-            "supplier": "AliExpress (через РФ-склад)"
-        }
-
-try:
-    from notion import create_landing_page
-except ImportError:
-    pass
-
-# Настройки
+# Получаем токен из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+# Render использует порт 10000 по умолчанию
 PORT = int(os.environ.get("PORT", 10000))
 
-# Бот и диспетчер
+# Создаём бота и диспетчер
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Категории
+# Временное хранилище (если понадобится)
+user_data = {}
+
+# Попробуем подключить ИИ
+try:
+    from ai import generate_description
+except ImportError:
+    # Если ai.py нет — используем заглушку
+    def generate_description(product_name, category):
+        return "Популярный товар с высокой наценкой. В тренде."
+
+# Клавиатура с категориями
 categories_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Электроника")],
-        [KeyboardButton(text="Одежда")],
-        [KeyboardButton(text="Гаджеты")],
-        [KeyboardButton(text="Дом и дача")],
-        [KeyboardButton(text="Красота и уход")]
+        [KeyboardButton(text="📱 Телефоны и аксессуары")],
+        [KeyboardButton(text="🎧 Наушники и аудио")],
+        [KeyboardButton(text="💻 Компьютеры и ноутбуки")],
+        [KeyboardButton(text="🎮 Игры и приставки")],
+        [KeyboardButton(text="🏠 Дом и сад")],
+        [KeyboardButton(text="👗 Одежда и обувь")],
+        [KeyboardButton(text="💄 Красота и здоровье")],
+        [KeyboardButton(text="🐾 Товары для животных")],
+        [KeyboardButton(text="🚗 Авто и мото")],
+        [KeyboardButton(text="🧸 Детские товары")]
     ],
     resize_keyboard=True
 )
@@ -59,78 +54,69 @@ async def start(message: types.Message):
         parse_mode="Markdown"
     )
 
-@dp.message(lambda m: m.text in ["Электроника", "Одежда", "Гаджеты", "Дом и дача", "Красота и уход"])
+@dp.message(lambda m: m.text in [
+    "📱 Телефоны и аксессуары", "🎧 Наушники и аудио", "💻 Компьютеры и ноутбуки",
+    "🎮 Игры и приставки", "🏠 Дом и сад", "👗 Одежа и обувь",
+    "💄 Красота и здоровье", "🐾 Товары для животных",
+    "🚗 Авто и мото", "🧸 Детские товары"
+])
 async def category_chosen(message: types.Message):
-    query = message.text
-    await message.answer("🔍 Ищу товары у российских поставщиков...")
+    """
+    Обрабатывает выбор категории пользователем.
+    Генерирует описание через ИИ и показывает товар.
+    """
+    user_id = message.from_user.id
+    category = message.text
 
-    # Ищем товар
-    product = find_russian_product(query)
-    if not product:
-        await message.answer("❌ Не удалось найти товар. Попробуй позже.")
-        return
+    # Убираем эмодзи для чистого названия
+    product_name = category.replace("📱 ", "").replace("🎧 ", "").replace("💻 ", "").replace("🎮 ", "") \
+                          .replace("🏠 ", "").replace("👗 ", "").replace("💄 ", "").replace("🐾 ", "") \
+                          .replace("🚗 ", "").replace("🧸 ", "") + " по акции"
 
-    # Расчёт
-    cost = product["price_rub"]
-    delivery_cost = 150  # Доставка до клиента
-    sale_price = int(cost * 2.2)  # Наценка 120%
-    profit = sale_price - cost - delivery_cost
-    margin = int((profit / (cost + delivery_cost)) * 100)
+    # Генерируем описание через ИИ
+    description = generate_description(product_name, category)
 
-    # Описание от ИИ
-    description = generate_description(product["name"], query)
+    # Показываем, что ищем
+    await message.answer(
+        f"🔍 Ищу трендовые товары в категории: *{category}*...",
+        parse_mode="Markdown"
+    )
 
-    # Показываем
-    await message.answer_photo(
-        photo=product["image"],
-        caption=(
-            f"📦 *{product['name']}*\n\n"
-            f"💡 {description}\n\n"
-            f"🛒 Поставщик: *{product['supplier']}*\n"
-            f"🚚 Доставка: {product['delivery_days']} дней\n\n"
-            f"💰 Закупка: {cost} ₽\n"
-            f"🎯 Продажа: {sale_price} ₽\n"
-            f"📈 Прибыль: {profit} ₽ ({margin}%)\n\n"
-            f"Создать лендинг?"
-        ),
+    # Показываем товар
+    await message.answer(
+        f"📦 *{product_name}*\n\n"
+        f"💡 {description}\n\n"
+        f"💰 Закупка: ~500 ₽\n"
+        f"🎯 Продажа: 1490 ₽\n"
+        f"🚚 Доставка: 10–14 дней\n\n"
+        f"Добавить в лендинг?",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✅ Да", callback_data="create_landing"),
+                    InlineKeyboardButton(text="✅ Да", callback_data="add_product"),
                     InlineKeyboardButton(text="❌ Нет", callback_data="next_product")
                 ]
             ]
         )
     )
 
-@dp.callback_query(lambda c: c.data == "create_landing")
-async def create_landing(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    # Здесь можно сохранить выбранный товар для пользователя
-    try:
-        # Предположим, что у нас есть notion.py
-        from notion import create_landing_page
-        landing_url = create_landing_page({
-            "name": "Умная розетка",
-            "price": "1990 ₽",
-            "description": "Управляется голосом через Алису"
-        })
-        await callback.message.answer(
-            "✅ Лендинг создан!\n\n"
-            f"👉 {landing_url}\n\n"
-            "Копируй ссылку и публикуй в Telegram / TikTok!"
-        )
-    except:
-        await callback.message.answer(
-            "✅ Отлично! Товар добавлен.\n\n"
-            "Скоро будет лендинг. Пока можешь сделать скриншот этого сообщения."
-        )
+@dp.callback_query(lambda c: c.data == "add_product")
+async def add_product(callback: types.CallbackQuery):
+    await callback.message.answer(
+        "✅ Отлично! Товар добавлен.\n\n"
+        "Скоро я создам для тебя лендинг в Notion — просто подожди!"
+    )
     await callback.answer()
 
-# === Веб-сервер для Render ===
+@dp.callback_query(lambda c: c.data == "next_product")
+async def next_product(callback: types.CallbackQuery):
+    await callback.message.answer("🔍 Ищу другой товар…")
+    await callback.answer()
+
+# === Веб-сервер для Render (чтобы не было "No open ports detected") ===
 async def health_check(request):
-    return web.Response(text="DropHub is running", status=200)
+    return web.Response(text="Bot is running", status=200)
 
 async def start_web_server():
     app = web.Application()
@@ -140,11 +126,17 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
 
-# === Запуск ===
+# === Запуск бота и сервера ===
 async def main():
+    # Запускаем веб-сервер
     await start_web_server()
     print(f"✅ Веб-сервер запущен на порту {PORT}")
-    await dp.start_polling(bot)
+
+    # Запускаем бота
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        print(f"❌ Ошибка бота: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
