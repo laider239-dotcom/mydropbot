@@ -2,16 +2,10 @@
 import requests
 import os
 
-# URL API DeepSeek
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-
-# Получаем API-ключ из переменных окружения
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 def generate_description(product_name, category):
-    """
-    Генерация описания товара через DeepSeek
-    """
     if not DEEPSEEK_API_KEY:
         return "Популярный товар с высокой наценкой. В тренде."
 
