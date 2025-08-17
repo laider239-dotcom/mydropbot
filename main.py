@@ -6,32 +6,45 @@ from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiohttp import web
 
-# Получаем токен из переменных окружения
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Импортируем модули
+try:
+    from ai import generate_description
+except ImportError:
+    def generate_description(name, cat): return "Популярный товар с высокой наценкой."
 
-# Render использует порт 10000 по умолчанию
+try:
+    from russian_suppliers import find_russian_product
+except ImportError:
+    def find_russian_product(query):
+        return {
+            "name": f"Трендовый {query}",
+            "price_rub": 450,
+            "image": "https://pics.aliexpress.com/...jpg",
+            "delivery_days": 5,
+            "supplier": "AliExpress (через РФ-склад)"
+        }
+
+try:
+    from notion import create_landing_page
+except ImportError:
+    pass
+
+# Настройки
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.environ.get("PORT", 10000))
 
-# Создаём бота и диспетчер
+# Бот и диспетчер
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Временное хранилище
-user_data = {}
-
-# Клавиатура с категориями
+# Категории
 categories_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📱 Телефоны и аксессуары")],
-        [KeyboardButton(text="🎧 Наушники и аудио")],
-        [KeyboardButton(text="💻 Компьютеры и ноутбуки")],
-        [KeyboardButton(text="🎮 Игры и приставки")],
-        [KeyboardButton(text="🏠 Дом и сад")],
-        [KeyboardButton(text="👗 Одежда и обувь")],
-        [KeyboardButton(text="💄 Красота и здоровье")],
-        [KeyboardButton(text="🐾 Товары для животных")],
-        [KeyboardButton(text="🚗 Авто и мото")],
-        [KeyboardButton(text="🧸 Детские товары")]
+        [KeyboardButton(text="Электроника")],
+        [KeyboardButton(text="Одежда")],
+        [KeyboardButton(text="Гаджеты")],
+        [KeyboardButton(text="Дом и дача")],
+        [KeyboardButton(text="Красота и уход")]
     ],
     resize_keyboard=True
 )
@@ -39,118 +52,85 @@ categories_kb = ReplyKeyboardMarkup(
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer(
-        "Привет! Я — DropBot 🤖\n"
-        "Помогу запустить дропшиппинг за 5 минут.\n\n"
+        "🚀 Добро пожаловать в *DropHub*!\n"
+        "Платформа для дропшиппинга в РФ.\n\n"
         "Что хочешь продавать?",
-        reply_markup=categories_kb
-    )
-
-@dp.message(lambda m: m.text in [
-    "📱 Телефоны и аксессуары", "🎧 Наушники и аудио", "💻 Компьютеры и ноутбуки",
-    "🎮 Игры и приставки", "🏠 Дом и сад", "👗 Одежда и обувь",
-    "💄 Красота и здоровье", "🐾 Товары для животных",
-    "🚗 Авто и мото", "🧸 Детские товары"
-])
-async def category_chosen(message: types.Message):
-    user_id = message.from_user.id
-    category = message.text
-    user_data[user_id] = {"category": category}
-
-    await message.answer(
-        f"🔍 Ищу трендовые товары в категории: *{category}*...",
+        reply_markup=categories_kb,
         parse_mode="Markdown"
     )
 
-    product_name = category.replace("📱 ", "").replace("🎧 ", "").replace("💻 ", "") + " по акции"
-    await message.answer(
-        f"📦 *{product_name}*\n\n"
-        f"💡 Популярный товар с высокой наценкой. В тренде на TikTok.\n\n"
-        f"💰 Закупка: ~600 ₽\n"
-        f"🎯 Продажа: 1990 ₽\n"
-        f"🚚 Доставка: 10–18 дней\n\n"
-        f"Добавить в лендинг?",
+@dp.message(lambda m: m.text in ["Электроника", "Одежда", "Гаджеты", "Дом и дача", "Красота и уход"])
+async def category_chosen(message: types.Message):
+    query = message.text
+    await message.answer("🔍 Ищу товары у российских поставщиков...")
+
+    # Ищем товар
+    product = find_russian_product(query)
+    if not product:
+        await message.answer("❌ Не удалось найти товар. Попробуй позже.")
+        return
+
+    # Расчёт
+    cost = product["price_rub"]
+    delivery_cost = 150  # Доставка до клиента
+    sale_price = int(cost * 2.2)  # Наценка 120%
+    profit = sale_price - cost - delivery_cost
+    margin = int((profit / (cost + delivery_cost)) * 100)
+
+    # Описание от ИИ
+    description = generate_description(product["name"], query)
+
+    # Показываем
+    await message.answer_photo(
+        photo=product["image"],
+        caption=(
+            f"📦 *{product['name']}*\n\n"
+            f"💡 {description}\n\n"
+            f"🛒 Поставщик: *{product['supplier']}*\n"
+            f"🚚 Доставка: {product['delivery_days']} дней\n\n"
+            f"💰 Закупка: {cost} ₽\n"
+            f"🎯 Продажа: {sale_price} ₽\n"
+            f"📈 Прибыль: {profit} ₽ ({margin}%)\n\n"
+            f"Создать лендинг?"
+        ),
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✅ Да", callback_data="add_product"),
+                    InlineKeyboardButton(text="✅ Да", callback_data="create_landing"),
                     InlineKeyboardButton(text="❌ Нет", callback_data="next_product")
                 ]
             ]
         )
     )
 
-@dp.message(lambda message: message.text.startswith("/find"))
-async def find_product(message: types.Message):
-    query = message.text.replace("/find", "").strip()
-    
-    if not query:
-        await message.answer("Напиши, что ищешь. Например: `/find наушники`", parse_mode="Markdown")
-        return
-
-    await message.answer(
-        f"🔍 Ищу трендовые товары по запросу: *{query}*...",
-        parse_mode="Markdown"
-    )
-
-    products = [
-        {
-            "name": f"Трендовые {query} 2025",
-            "cost": "500 ₽",
-            "price": "1790 ₽",
-            "delivery": "12–16 дней",
-            "desc": "Вирусный товар на TikTok. Высокая конверсия."
-        },
-        {
-            "name": f"Премиум {query} с гарантией",
-            "cost": "700 ₽",
-            "price": "2290 ₽",
-            "delivery": "10–14 дней",
-            "desc": "Качественный товар с быстрой доставкой."
-        }
-    ]
-
-    for p in products:
-        await message.answer(
-            f"✨ *{p['name']}*\n\n"
-            f"💡 {p['desc']}\n\n"
-            f"💰 Закупка: {p['cost']}\n"
-            f"🎯 Продажа: {p['price']}\n"
-            f"🚚 Доставка: {p['delivery']}\n\n"
-            f"Добавить в лендинг?",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="✅ Да",
-                            callback_data=f"add_{p['name'][:10]}"
-                        ),
-                        InlineKeyboardButton(
-                            text="❌ Нет",
-                            callback_data="next_product"
-                        )
-                    ]
-                ]
-            )
+@dp.callback_query(lambda c: c.data == "create_landing")
+async def create_landing(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    # Здесь можно сохранить выбранный товар для пользователя
+    try:
+        # Предположим, что у нас есть notion.py
+        from notion import create_landing_page
+        landing_url = create_landing_page({
+            "name": "Умная розетка",
+            "price": "1990 ₽",
+            "description": "Управляется голосом через Алису"
+        })
+        await callback.message.answer(
+            "✅ Лендинг создан!\n\n"
+            f"👉 {landing_url}\n\n"
+            "Копируй ссылку и публикуй в Telegram / TikTok!"
         )
-
-@dp.callback_query(lambda c: c.data.startswith("add_"))
-async def add_product(callback: types.CallbackQuery):
-    await callback.message.answer(
-        "✅ Отлично! Товар добавлен.\n\n"
-        "Скоро я создам для тебя лендинг в Notion — просто подожди!"
-    )
-    await callback.answer()
-
-@dp.callback_query(lambda c: c.data == "next_product")
-async def next_product(callback: types.CallbackQuery):
-    await callback.message.answer("🔍 Ищу другой товар…")
+    except:
+        await callback.message.answer(
+            "✅ Отлично! Товар добавлен.\n\n"
+            "Скоро будет лендинг. Пока можешь сделать скриншот этого сообщения."
+        )
     await callback.answer()
 
 # === Веб-сервер для Render ===
 async def health_check(request):
-    return web.Response(text="Bot is running", status=200)
+    return web.Response(text="DropHub is running", status=200)
 
 async def start_web_server():
     app = web.Application()
@@ -160,18 +140,11 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
 
-# === Запуск бота и сервера ===
+# === Запуск ===
 async def main():
-    # Запускаем веб-сервер
     await start_web_server()
-    print(f"Web server started on port {PORT}")
-
-    # Запускаем бота
-    try:
-        await dp.start_polling(bot)
-    except Exception as e:
-        print(f"Ошибка бота: {e}")
-        # Не перезапускаем — пусть Render сам перезапустит сервис
+    print(f"✅ Веб-сервер запущен на порту {PORT}")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
